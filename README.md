@@ -10,7 +10,8 @@ BlockMyDough is a simple, humorous productivity tool designed to help you stay f
 
 ## Requirements
 
--   Python 3.14 or higher
+-   [uv](https://github.com/astral-sh/uv) project manager
+-   Python 3.14 or higher (managed automatically by uv)
 -   Root/Administrator privileges (required to modify `/etc/hosts`)
 -   Linux/Unix environment (currently designed for `/etc/hosts`)
 
@@ -23,14 +24,18 @@ BlockMyDough is a simple, humorous productivity tool designed to help you stay f
     cd blockMyDough
     ```
 
-2. Ensure you have Python installed.
+2. Sync the project dependencies:
+
+    ```bash
+    uv sync
+    ```
 
 ## Usage
 
-To run the blocker, execute the `main.py` script with root privileges:
+To run the blocker, execute the script using `uv` with root privileges:
 
 ```bash
-sudo python3 main.py
+sudo uv run main.py
 ```
 
 The script will:

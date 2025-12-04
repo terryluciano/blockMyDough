@@ -1,6 +1,6 @@
 import random
 from pathlib import Path
-import shutil
+import os
 
 dumbMessages = [
 	'Touch grass, not yourself.',
@@ -46,11 +46,22 @@ dumbMessages = [
 ]
 
 data_dir = 'data'
+
 blocked_domains_file: list[str] = [
 	'example.com',
+	'www.example.com',
 	'youtube.com',
+	'www.youtube.com',
 	'facebook.com',
+	'www.facebook.com',
 ]
+
+block_entry_marker = '# Start BlockMyDough Entries'
+block_end_entry_marker = '# End BlockMyDough Entries'
+
+
+def print_break():
+	print('##############################################################################')
 
 
 def revert_host_file():
@@ -58,6 +69,8 @@ def revert_host_file():
 
 
 def backup_hosts_file():
+	print_break()
+
 	print('Backing up your hosts file...\n')
 
 	script_dir = Path(__file__).resolve()
@@ -65,14 +78,104 @@ def backup_hosts_file():
 	backup_path = script_dir.parent / data_dir / 'hosts.backup'
 	backup_path.parent.mkdir(parents=True, exist_ok=True)
 
-	shutil.copyfile('/etc/hosts', backup_path)
+	hosts_file = open('/etc/hosts', 'r')
+	hosts_file.seek(0)
+
+	lines = hosts_file.readlines()
+
+	in_block = False
+	clean_lines = []
+	for line in lines:
+		if block_entry_marker in line:
+			in_block = True
+			continue
+
+		if block_end_entry_marker in line:
+			in_block = False
+			continue
+
+		if not in_block:
+			clean_lines.append(line)
+
+	hosts_backup_file = open(backup_path, 'w')
+
+	for line in clean_lines:
+		hosts_backup_file.write('{0}'.format(line))
+
+	hosts_backup_file.close()
 
 	print('A backup of your hosts file has been created at:')
 	print('{0}\n'.format(backup_path))
 
 
 def generate_block_hosts_file():
-	pass
+	print_break()
+
+	# Open hosts file and update it
+	print('Updating your hosts file to block dumb sites...\n')
+
+	with open('/etc/hosts', 'r') as f:
+		lines = f.readlines()
+
+	# Filter out existing block
+	clean_lines = []
+	in_block = False
+	for line in lines:
+		if block_entry_marker in line:
+			in_block = True
+			continue
+
+		if block_end_entry_marker in line:
+			in_block = False
+			continue
+
+		if not in_block:
+			clean_lines.append(line)
+
+	# Write clean content + new block
+	with open('/etc/hosts', 'w') as f:
+		for line in clean_lines:
+			f.write(line)
+
+		if clean_lines and not clean_lines[-1].endswith('\n'):
+			f.write('\n')
+
+		f.write('{0}\n'.format(block_entry_marker))
+
+		for domain in blocked_domains_file:
+			f.write('127.0.0.1 {0}\n'.format(domain))
+			f.write('::1       {0}\n'.format(domain))
+
+		f.write('{0}\n'.format(block_end_entry_marker))
+
+	print('Domains have been BLOCKED!')
+
+
+def flush_dns_cache():
+	print_break()
+
+	print('Flushing DNS cache...\n')
+
+	# Flush DNS cache
+	result = os.system('resolvectl flush-caches')
+
+	if result == 0:
+		print('DNS cache flushed successfully!\n')
+	else:
+		print('Warning: Failed to flush DNS cache (exit code: {0})\n'.format(result))
+		print('You may need to manually run: sudo resolvectl flush-caches\n')
+		return False
+
+	# Verify the resolver is running
+	result = os.system('systemctl is-active --quiet systemd-resolved')
+
+	if result == 0:
+		print('systemd-resolved is active and running.\n')
+	else:
+		print('Warning: systemd-resolved may not be running.\n')
+		return False
+
+	return True
 
 
 def main():
@@ -85,6 +188,8 @@ def main():
 	backup_hosts_file()
 
 	generate_block_hosts_file()
+
+	flush_dns_cache()
 
 	print('Goodbye!\n')
 
