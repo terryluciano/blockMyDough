@@ -45,7 +45,9 @@ dumbMessages = [
 	'Jesus is scrolling past this and shaking his head.',
 ]
 
-data_dir = 'data'
+script_dir = Path(__file__).resolve()
+data_dir_name = 'data'
+backup_path = script_dir.parent.parent / data_dir_name / 'hosts.backup'
 
 blocked_domains_file: list[str] = [
 	'example.com',
@@ -73,9 +75,6 @@ def backup_hosts_file():
 
 	print('Backing up your hosts file...\n')
 
-	script_dir = Path(__file__).resolve()
-
-	backup_path = script_dir.parent / data_dir / 'hosts.backup'
 	backup_path.parent.mkdir(parents=True, exist_ok=True)
 
 	hosts_file = open('/etc/hosts', 'r')
