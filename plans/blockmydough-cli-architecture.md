@@ -385,49 +385,72 @@ When you block a domain, the daemon adds entries like this to `/etc/hosts`:
 
 ## Python Project Structure
 
+Uses a **flat layout** (no `src/` wrapper) since this is a standalone CLI tool, not a library.
+
 ```
 app/
 ├── pyproject.toml
-├── src/
-│   └── blockmydough/
+├── blockmydough/
+│   ├── __init__.py
+│   ├── constants.py              # Markers, paths, defaults
+│   ├── exceptions.py             # Custom exceptions (PassphraseRequired, etc.)
+│   │
+│   ├── cli/                      # Command-line interface
+│   │   ├── __init__.py
+│   │   ├── app.py                # Typer app definition & entry point
+│   │   └── commands/
+│   │       ├── __init__.py
+│   │       ├── domain.py         # add, remove, list
+│   │       ├── block.py          # block, unblock, status
+│   │       ├── schedule.py       # schedule add/remove/list
+│   │       ├── preset.py         # preset list/add
+│   │       ├── daemon.py         # start, stop, restart
+│   │       └── passphrase.py     # passphrase set/verify
+│   │
+│   ├── daemon/                   # Background service
+│   │   ├── __init__.py
+│   │   ├── service.py            # Main daemon loop & entry point
+│   │   ├── socket_server.py      # Unix socket handler
+│   │   ├── watcher.py            # inotify /etc/hosts monitor
+│   │   ├── scheduler.py          # Timer + schedule engine
+│   │   └── notifier.py           # Desktop notifications via D-Bus
+│   │
+│   ├── core/                     # Shared business logic
+│   │   ├── __init__.py
+│   │   ├── blocker.py            # /etc/hosts manipulation
+│   │   ├── domains.py            # Domain list management
+│   │   ├── state.py              # State persistence (JSON)
+│   │   ├── auth.py               # Argon2 passphrase hashing/verify
+│   │   └── presets.py            # Built-in domain presets
+│   │
+│   └── ipc/                      # Inter-Process Communication
 │       ├── __init__.py
-│       │
-│       ├── cli/                    # Command-line interface
-│       │   ├── __init__.py
-│       │   ├── main.py             # Entry point: typer app
-│       │   └── commands/
-│       │       ├── domain.py       # add, remove, list commands
-│       │       ├── block.py        # block, unblock, status
-│       │       ├── schedule.py     # schedule add/remove/list
-│       │       ├── preset.py       # preset list/add commands
-│       │       └── security.py     # passphrase set/verify
-│       │
-│       ├── daemon/                 # Background service
-│       │   ├── __init__.py
-│       │   ├── main.py             # Daemon entry point
-│       │   ├── server.py           # Unix socket server
-│       │   ├── watcher.py          # inotify hosts file monitor
-│       │   ├── scheduler.py        # Timer + schedule engine
-│       │   ├── notifier.py         # Desktop notifications via D-Bus
-│       │   └── watchdog.py         # Watchdog helper process
-│       │
-│       ├── core/                   # Shared business logic
-│       │   ├── blocker.py          # /etc/hosts manipulation
-│       │   ├── state.py            # State persistence
-│       │   ├── auth.py             # Passphrase hashing/verify
-│       │   ├── presets.py          # Built-in domain presets
-│       │   └── config.py           # Configuration
-│       │
-│       └── protocol/               # CLI↔Daemon communication
-│           └── messages.py         # JSON message formats
+│       ├── client.py             # CLI → Daemon requests
+│       ├── messages.py           # Request/Response Pydantic models
+│       └── handlers.py           # Daemon message handlers
+│
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py               # Pytest fixtures
+│   ├── test_blocker.py
+│   ├── test_auth.py
+│   └── test_domains.py
 │
 ├── systemd/
-│   ├── blockmydough.service        # Main daemon service
+│   ├── blockmydough.service      # Main daemon service
 │   └── blockmydough-watchdog.service
 │
 └── scripts/
-    ├── install.sh                  # Installation script
+    ├── install.sh                # Installation script
     └── uninstall.sh
+```
+
+### Entry Points (in pyproject.toml)
+
+```toml
+[project.scripts]
+blockmydough = "blockmydough.cli.app:main"
+blockmydough-daemon = "blockmydough.daemon.service:main"
 ```
 
 ---

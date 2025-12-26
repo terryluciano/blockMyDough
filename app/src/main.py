@@ -20,6 +20,7 @@ dumbMessages = [
 	"Secure the bag, secure the future. You're doing the most (in a good way)!",
 ]
 
+
 script_dir = Path(__file__).resolve()
 data_dir_name = 'data'
 backup_path = script_dir.parent.parent / data_dir_name / 'hosts.backup'
@@ -63,7 +64,7 @@ def backup_hosts_file():
 	lines = hosts_file.readlines()
 
 	in_block = False
-	clean_lines = []
+	clean_lines: list[str] = []
 	for line in lines:
 		if block_entry_marker in line:
 			in_block = True
@@ -97,7 +98,7 @@ def generate_block_hosts_file():
 		lines = f.readlines()
 
 	# Filter out existing block
-	clean_lines = []
+	clean_lines: list[str] = []
 	in_block = False
 	for line in lines:
 		if block_entry_marker in line:
