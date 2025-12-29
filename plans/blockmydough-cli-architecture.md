@@ -249,42 +249,129 @@ $ blockmydough preset add video
 
 ### Passphrase Protection Flow
 
+<!-- CRITICAL: Added rate limiting to prevent brute force attacks on passphrase -->
+
 ```
-                        ┌─────────────────────────────────┐
-                        │   Protected Operations          │
-                        │                                 │
-                        │  • Stop daemon                  │
-                        │  • Remove domain                │
-                        │  • Cancel timer                 │
-                        │  • Delete schedule              │
-                        └────────────────┬────────────────┘
-                                         │
-                                         ▼
-                               ┌─────────────────┐
-                               │ Is block active?│
-                               └────────┬────────┘
-                                        │
-                    ┌───────────────────┼───────────────────┐
-                    │ YES               │                NO │
-                    ▼                   │                   ▼
-           ┌─────────────────┐          │          ┌────────────────┐
-           │ Enter passphrase│          │          │ Allow operation│
-           └───────┬─────────┘          │          └────────────────┘
-                   │                    │
-                   ▼                    │
-          ┌────────────────┐            │
-          │ Verify hash    │            │
-          └───────┬────────┘            │
-                  │                     │
-       ┌──────────┴──────────┐          │
-       │                     │          │
-    CORRECT                WRONG        │
-       │                     │          │
-       ▼                     ▼          │
-┌────────────┐      ┌────────────┐      │
-│   Allow    │      │    Deny    │      │
-│ operation  │      │ operation  │      │
-└────────────┘      └────────────┘      │
+                           ┌─────────────────────────────────┐
+                           │   Protected Operations          │
+                           │                                 │
+                           │  • Stop daemon                  │
+                           │  • Remove domain                │
+                           │  • Cancel timer                 │
+                           │  • Delete schedule              │
+                           └────────────────┬────────────────┘
+                                            │
+                                            ▼
+                                   ┌─────────────────┐
+                                   │ Is block active?│
+                                   └────────┬────────┘
+                                            │
+                        ┌───────────────────┼───────────────────┐
+                        │ YES               │                NO │
+                        ▼                   │                   ▼
+               ┌─────────────────┐          │         ┌────────────────┐
+               │ Check rate limit│          │         │ Allow operation│
+               └───────┬─────────┘          │         └────────────────┘
+                       │                    │
+            ┌──────────┴──────────┐         │
+            │                     │         │
+        ALLOWED              LOCKED OUT     │
+            │                     │         │
+            ▼                     ▼         │
+    ┌─────────────────┐  ┌──────────────┐   │
+    │ Enter passphrase│  │ Wait X secs  │   │
+    └───────┬─────────┘  │ (show timer) │   │
+            │            └──────────────┘   │
+            ▼                               │
+    ┌────────────────┐                      │
+    │ Verify hash    │                      │
+    └───────┬────────┘                      │
+            │                               │
+    ┌───────┴───────┐                       │
+    │               │                       │
+ CORRECT          WRONG                     │
+    │               │                       │
+    ▼               ▼                       │
+┌─────────┐  ┌─────────────────────┐        │
+│ Allow   │  │ Increment fail count│        │
+│ + reset │  │ + apply backoff     │        │
+│ fails   │  └─────────────────────┘        │
+└─────────┘                                 │
+```
+
+### Rate Limiting Specification
+
+<!-- CRITICAL: Without rate limiting, passphrase can be brute-forced -->
+
+The daemon tracks failed passphrase attempts and enforces exponential backoff.
+
+> **Note:** Uses Unix epoch timestamps (`time.time()`) instead of `time.monotonic()`
+> because `monotonic()` resets to zero on system reboot, which would allow an attacker
+> to reboot and bypass rate limiting.
+
+```python
+# blockmydough/core/auth.py
+
+from dataclasses import dataclass, field
+from time import time
+
+@dataclass
+class RateLimitState:
+    """
+    Persisted in state.json under 'rate_limit' key.
+
+    Uses Unix epoch timestamps for persistence across reboots.
+    """
+    failed_attempts: int = 0
+    last_attempt_epoch: float = 0.0      # Unix timestamp
+    lockout_until_epoch: float = 0.0     # Unix timestamp
+
+class RateLimiter:
+    """
+    Exponential backoff for passphrase attempts.
+
+    Backoff schedule:
+      1 failure  → 2 second wait
+      2 failures → 4 second wait
+      3 failures → 8 second wait
+      4 failures → 16 second wait
+      5 failures → 32 second wait
+      6+ failures → 60 second wait (capped)
+    """
+
+    BASE_DELAY_SECONDS = 2
+    MAX_DELAY_SECONDS = 60
+    RESET_AFTER_SECONDS = 300  # Reset counter after 5 min of no attempts
+
+    def get_lockout_remaining(self, state: RateLimitState) -> float:
+        """Returns seconds until next attempt allowed. 0 if allowed now."""
+        now = time()
+        if state.lockout_until_epoch > now:
+            return state.lockout_until_epoch - now
+        return 0.0
+
+    def record_failure(self, state: RateLimitState) -> RateLimitState:
+        """Record a failed attempt and calculate next lockout."""
+        now = time()
+
+        # Reset if enough time has passed
+        if now - state.last_attempt_epoch > self.RESET_AFTER_SECONDS:
+            state.failed_attempts = 0
+
+        state.failed_attempts += 1
+        state.last_attempt_epoch = now
+
+        delay = min(
+            self.BASE_DELAY_SECONDS * (2 ** (state.failed_attempts - 1)),
+            self.MAX_DELAY_SECONDS
+        )
+        state.lockout_until_epoch = now + delay
+
+        return state
+
+    def record_success(self, state: RateLimitState) -> RateLimitState:
+        """Reset rate limit state on successful auth."""
+        return RateLimitState()  # Fresh state
 ```
 
 ---
@@ -366,30 +453,283 @@ When you block a domain, the daemon adds entries like this to `/etc/hosts`:
 -   Browser tries to connect to localhost → nothing there → connection refused
 -   You cannot access YouTube
 
+### Immutable File Protection (chattr +i)
+
+For stronger tamper protection, the daemon makes `/etc/hosts` immutable after applying blocks:
+
+```python
+# blockmydough/core/blocker.py
+
+import subprocess
+
+def set_immutable(path: str = "/etc/hosts") -> None:
+    """Make file immutable - cannot be modified even by root."""
+    subprocess.run(["chattr", "+i", path], check=True)
+
+def clear_immutable(path: str = "/etc/hosts") -> None:
+    """Remove immutable flag to allow modifications."""
+    subprocess.run(["chattr", "-i", path], check=True)
+```
+
+**Flow when blocking:**
+
+1. `chattr -i /etc/hosts` (remove immutable if set)
+2. Write block entries to `/etc/hosts`
+3. `chattr +i /etc/hosts` (make immutable again)
+
+**Benefits:**
+
+-   Even `sudo nano /etc/hosts` will fail with "Operation not permitted"
+-   Attacker must know to run `chattr -i` first
+-   inotify watcher still runs as backup (detects if someone removes immutable flag)
+
+### Browser DNS Cache Warning
+
+> ⚠️ **Important:** Changes to `/etc/hosts` may not take effect immediately due to
+> browser DNS caching. If a site is still accessible after blocking:
+>
+> 1. **Close and reopen the browser** (fastest solution)
+> 2. **Use private/incognito mode** (no cached DNS)
+> 3. **Flush system DNS cache:** `sudo resolvectl flush-caches`
+> 4. **Clear browser DNS cache:** `chrome://net-internals/#dns` → "Clear host cache"
+>
+> The daemon will display this warning when blocks are first applied.
+
 ---
 
 ## File Locations
 
-| Path                                   | Purpose                                  |
-| -------------------------------------- | ---------------------------------------- |
-| `/usr/local/bin/blockmydough`          | CLI tool                                 |
-| `/usr/local/bin/blockmydough-daemon`   | Background daemon                        |
-| `/run/blockmydough/daemon.sock`        | Unix socket for CLI↔daemon communication |
-| `/var/lib/blockmydough/state.json`     | Current state (timers, active blocks)    |
-| `/var/lib/blockmydough/domains.txt`    | Your blocked domain list                 |
-| `/var/lib/blockmydough/schedules.json` | Your saved schedules                     |
-| `/var/lib/blockmydough/auth.key`       | Hashed passphrase (Argon2)               |
-| `/var/log/blockmydough/daemon.log`     | Log file                                 |
+| Path                                   | Purpose                                  | Permissions |
+| -------------------------------------- | ---------------------------------------- | ----------- |
+| `/usr/local/bin/blockmydough`          | CLI tool                                 | `0755`      |
+| `/usr/local/bin/blockmydough-daemon`   | Background daemon                        | `0755`      |
+| `/run/blockmydough/daemon.sock`        | Unix socket for CLI↔daemon communication | `0660`      |
+| `/var/lib/blockmydough/state.json`     | Current state (timers, active blocks)    | `0600`      |
+| `/var/lib/blockmydough/domains.txt`    | Your blocked domain list                 | `0644`      |
+| `/var/lib/blockmydough/schedules.json` | Your saved schedules                     | `0600`      |
+| `/var/lib/blockmydough/auth.key`       | Hashed passphrase (Argon2)               | `0600`      |
+| `/var/log/blockmydough/daemon.log`     | Log file                                 | `0640`      |
+
+**Note on permissions:**
+
+-   `0600` = read/write for root only (sensitive files)
+-   `0640` = read/write for root, read for group (logs)
+-   `0644` = read/write for root, read for everyone (domain list is not sensitive)
+-   `0660` = read/write for root and blockmydough group (socket access)
+
+### State File Schema (state.json)
+
+The daemon persists its runtime state to survive restarts:
+
+```json
+{
+	"version": 1,
+	"active_block": {
+		"type": "timer",
+		"started_at": "2025-01-15T10:00:00Z",
+		"ends_at": "2025-01-15T12:00:00Z",
+		"domains_count": 15,
+		"triggered_by": "cli"
+	},
+	"rate_limit": {
+		"failed_attempts": 2,
+		"last_attempt_epoch": 1705320000.0,
+		"lockout_until_epoch": 1705320004.0
+	},
+	"hosts_hash": "sha256:abc123...",
+	"immutable_set": true
+}
+```
+
+**Fields:**
+
+| Field                        | Type                                | Description                                                |
+| ---------------------------- | ----------------------------------- | ---------------------------------------------------------- |
+| `version`                    | int                                 | Schema version for migrations                              |
+| `active_block.type`          | `"timer"` \| `"schedule"` \| `null` | Current block type                                         |
+| `active_block.started_at`    | ISO8601                             | When block started                                         |
+| `active_block.ends_at`       | ISO8601 \| `null`                   | When block ends (null for schedule-based)                  |
+| `active_block.domains_count` | int                                 | Number of domains currently blocked                        |
+| `active_block.triggered_by`  | string                              | What started the block ("cli", schedule name)              |
+| `rate_limit`                 | object                              | See RateLimitState above                                   |
+| `hosts_hash`                 | string                              | SHA256 of expected /etc/hosts content for tamper detection |
+| `immutable_set`              | bool                                | Whether chattr +i is currently applied                     |
+
+---
+
+## IPC Protocol (CLI ↔ Daemon)
+
+Communication happens over a Unix domain socket using newline-delimited JSON messages.
+
+### Wire Format
+
+```
+<JSON message>\n
+```
+
+Each message is a single JSON object followed by a newline. The connection is request-response: client sends one message, waits for one response.
+
+### Message Types
+
+```python
+# blockmydough/ipc/messages.py
+
+from pydantic import BaseModel
+from typing import Literal, Optional
+from datetime import datetime
+
+# === Requests (CLI → Daemon) ===
+
+class AddDomainRequest(BaseModel):
+    type: Literal["add_domain"] = "add_domain"
+    domain: str
+
+class RemoveDomainRequest(BaseModel):
+    type: Literal["remove_domain"] = "remove_domain"
+    domain: str
+    passphrase: Optional[str] = None  # Required if block active
+
+class StartBlockRequest(BaseModel):
+    type: Literal["start_block"] = "start_block"
+    duration_seconds: Optional[int] = None  # --for
+    until_time: Optional[str] = None        # --until (HH:MM)
+
+class StopBlockRequest(BaseModel):
+    type: Literal["stop_block"] = "stop_block"
+    passphrase: str
+
+class GetStatusRequest(BaseModel):
+    type: Literal["get_status"] = "get_status"
+
+class VerifyPassphraseRequest(BaseModel):
+    type: Literal["verify_passphrase"] = "verify_passphrase"
+    passphrase: str
+
+# === Responses (Daemon → CLI) ===
+
+class SuccessResponse(BaseModel):
+    type: Literal["success"] = "success"
+    message: str
+
+class ErrorResponse(BaseModel):
+    type: Literal["error"] = "error"
+    code: str  # e.g., "PASSPHRASE_REQUIRED", "RATE_LIMITED", "INVALID_DOMAIN"
+    message: str
+    retry_after: Optional[float] = None  # Seconds until retry allowed
+
+class StatusResponse(BaseModel):
+    type: Literal["status"] = "status"
+    blocking_active: bool
+    block_type: Optional[str] = None  # "timer" | "schedule"
+    ends_at: Optional[datetime] = None
+    domains_count: int
+    domains: list[str]
+```
+
+### Example Exchange
+
+```
+CLI → Daemon:
+{"type": "start_block", "duration_seconds": 7200}
+
+Daemon → CLI:
+{"type": "success", "message": "Blocking 15 domains for 2 hours"}
+```
+
+```
+CLI → Daemon:
+{"type": "stop_block", "passphrase": "wrong-password"}
+
+Daemon → CLI:
+{"type": "error", "code": "INVALID_PASSPHRASE", "message": "Incorrect passphrase", "retry_after": 4.0}
+```
+
+---
+
+## Emergency Recovery
+
+If you forget your passphrase, you can recover the system by booting into recovery mode:
+
+### Recovery Procedure
+
+1. **Reboot into recovery mode**
+
+    - Restart your computer
+    - Hold `Shift` during boot to show GRUB menu (or press `Esc` on some systems)
+    - Select "Advanced options" → "Recovery mode"
+    - Choose "Drop to root shell"
+
+2. **Remove BlockMyDough protection**
+
+    ```bash
+    # Remove immutable flag from hosts file
+    chattr -i /etc/hosts
+
+    # Remove BlockMyDough entries from hosts
+    sed -i '/# Start BlockMyDough/,/# End BlockMyDough/d' /etc/hosts
+
+    # Stop and disable the daemon
+    systemctl disable blockmydough.service
+    systemctl disable blockmydough-watchdog.service
+
+    # Delete passphrase (forces re-setup)
+    rm /var/lib/blockmydough/auth.key
+
+    # Optionally, reset all state
+    rm /var/lib/blockmydough/state.json
+    ```
+
+3. **Reboot normally**
+
+    ```bash
+    reboot
+    ```
+
+4. **Re-enable BlockMyDough with new passphrase**
+
+    ```bash
+    sudo systemctl enable blockmydough.service
+    sudo blockmydough passphrase set
+    sudo blockmydough start
+    ```
+
+### Alternative: Live USB
+
+If you don't have recovery mode access:
+
+1. Boot from a Linux live USB
+2. Mount your root partition: `mount /dev/sda2 /mnt` (adjust device)
+3. Run the same cleanup commands with paths prefixed: `chattr -i /mnt/etc/hosts`
+4. Reboot into your normal system
+
+> ⚠️ **Security Note:** This is intentionally difficult. The purpose of BlockMyDough
+> is to prevent your impulsive self from bypassing blocks. The recovery process
+> requires physical access and a reboot, giving you time to reconsider.
 
 ---
 
 ## Python Project Structure
 
-Uses a **flat layout** (no `src/` wrapper) since this is a standalone CLI tool, not a library.
+Uses **uv** as the project manager and a **flat layout** (no `src/` wrapper) since this is a standalone CLI tool, not a library.
+
+> **Current State vs Target:** The workspace currently has a legacy structure with
+> `app/src/main.py`. Phase 1 of implementation will refactor this to the target
+> structure shown below. The existing `app/pyproject.toml` and `app/uv.lock` files
+> will be preserved.
+
+### Why uv?
+
+-   **Fast**: Written in Rust, installs packages 10-100x faster than pip
+-   **Reproducible**: Creates `uv.lock` lockfile for consistent installs across machines
+-   **Simple**: Replaces pip, pip-tools, virtualenv, and pyenv in one tool
+-   **Standards-compliant**: Uses standard `pyproject.toml` for configuration
 
 ```
 app/
-├── pyproject.toml
+├── pyproject.toml            # Project metadata and dependencies
+├── uv.lock                   # Lockfile (commit to version control)
+├── .python-version           # Python version constraint
+├── .venv/                    # Virtual environment (auto-created, gitignored)
 ├── blockmydough/
 │   ├── __init__.py
 │   ├── constants.py              # Markers, paths, defaults
