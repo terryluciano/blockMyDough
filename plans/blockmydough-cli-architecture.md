@@ -861,37 +861,95 @@ Notifications use D-Bus to integrate with your desktop environment (GNOME, KDE, 
 
 ## Implementation Plan
 
-### Phase 1: Core Functionality
+### Phase 1: Project Skeleton & Basic CLI
 
-1. Refactor existing [`main.py`](app/src/main.py:1) into proper module structure
-2. Implement domain storage (file-based, persistent)
-3. Implement CLI with typer (add, remove, list, block, status)
-4. Implement basic daemon with socket server
+_Goal: Establish the project structure and manage the domain list._
 
-### Phase 2: Timer & Watcher
+1. **Project Structure**:
+    - Refactor `app/` to flat layout with `blockmydough/` package.
+    - Initialize `core`, `cli`, `daemon`, `ipc` subpackages.
+    - Update `pyproject.toml` with dependencies (`typer`, `rich`, `pydantic`).
+2. **Core Logic**:
+    - Implement `core/domains.py` for file-based domain storage (`domains.txt`).
+    - Implement `core/presets.py` for predefined lists.
+3. **CLI (Part 1)**:
+    - Implement `cli/app.py` entry point.
+    - Implement `cli/commands/domain.py` (`add`, `remove`, `list`).
+    - Implement `cli/commands/preset.py`.
 
-1. Implement duration-based blocking timer
-2. Implement hosts file watcher with inotify
-3. Implement automatic re-apply on tampering
+### Phase 2: Daemon Infrastructure & IPC
 
-### Phase 3: Security
+_Goal: Get the daemon running and communicating with the CLI._
 
-1. Implement passphrase system with Argon2
-2. Add passphrase requirement for protected operations
-3. Implement systemd service with Restart=always
+1. **State Management**:
+    - Implement `core/state.py` handling `state.json` with Pydantic.
+    - Ensure thread-safe state updates.
+2. **IPC Protocol**:
+    - Define request/response models in `ipc/messages.py` (`StartBlockRequest`, `StatusResponse`, etc.).
+3. **Daemon Socket Server**:
+    - Implement `daemon/socket_server.py` (asyncio Unix socket server).
+    - Implement `ipc/client.py` for CLI communication.
+4. **Daemon Control**:
+    - Implement `daemon/service.py` main loop.
+    - Implement `cli/commands/daemon.py` (`start`, `stop`, `restart`, `status`).
 
-### Phase 4: Advanced Features
+### Phase 3: Blocking Engine & Tamper Protection
 
-1. Implement schedule-based blocking
-2. Implement watchdog helper process
-3. Create install/uninstall scripts
+_Goal: Implement the actual blocking capability and ensure it stays._
 
-### Phase 5: Polish
+1. **Blocker Module**:
+    - Implement `core/blocker.py` to modify `/etc/hosts`.
+    - Implement `chattr +i` toggle for immutable protection.
+2. **File Watcher**:
+    - Implement `daemon/watcher.py` using `watchfiles` (inotify).
+    - Detect external modifications to `/etc/hosts`.
+3. **Auto-Healing**:
+    - Wire watcher to `core/blocker.py` to re-apply blocks instantly upon tampering detection.
+4. **Timer System**:
+    - Implement duration-based blocking in `daemon/service.py` (or `scheduler.py`).
+    - Implement CLI `block --for` command.
 
-1. Add comprehensive logging
-2. Add `--verbose` and `--quiet` flags
-3. Write man page / documentation
-4. Testing on Fedora
+### Phase 4: Security & Authentication
+
+_Goal: Lock down the system so it can't be bypassed lightly._
+
+1. **Passphrase Core**:
+    - Implement `core/auth.py` using `argon2-cffi`.
+    - Implement `cli/commands/passphrase.py` (`set`, `verify`).
+2. **Rate Limiting**:
+    - Implement exponential backoff logic in `core/auth.py`.
+    - Persist lockout state in `state.json`.
+3. **Enforcement**:
+    - Update `ipc/handlers.py` to enforce authentication for restricted actions (stop, remove domain, etc.).
+    - Verify rate limits before verifying passphrases.
+
+### Phase 5: Advanced Features & Polish
+
+_Goal: Schedules, notifications, and system integration._
+
+1. **Scheduler**:
+    - Implement `daemon/scheduler.py` using `apscheduler` for recurring blocks.
+    - Implement `cli/commands/schedule.py`.
+2. **Notifications**:
+    - Implement `daemon/notifier.py` using `dbus-python`.
+    - Send alerts for timer expiry and tampering events.
+3. **Systemd Integration**:
+    - Refine `blockmydough.service` (Restart=always).
+    - Implement `sdnotify` keep-alive.
+    - Create `blockmydough-watchdog.service`.
+4. **Install/Uninstall**:
+    - Finalize `scripts/install.sh` (permissions, groups, systemd enablement).
+
+### Phase 6: Testing & Cleanup
+
+_Goal: Final verification._
+
+1. **Logging**: Ensure consistent Structured logging across daemon.
+2. **Documentation**: Update README and help texts.
+3. **End-to-End Testing**:
+    - Verify tamper protection with `chattr` active.
+    - Verify rate limiting persistence across restarts.
+    - Verify browser cache warning display.
 
 ---
 

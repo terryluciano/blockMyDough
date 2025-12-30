@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blockmydough"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "apscheduler>=3.11.2",
+    "argon2-cffi>=25.1.0",
+    "dbus-python>=1.4.0",
+    "pydantic>=2.12.5",
+    "rich>=14.2.0",
+    "sdnotify>=0.3.2",
+    "typer>=0.21.0",
+    "watchfiles>=1.1.1",
+]
+
+[project.scripts]
+blockmydough = "blockmydough.cli.app:app"
+# blockmydough-daemon = "blockmydough.daemon.service:main"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.7",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = 'single'
+indent-style = 'tab'
+docstring-code-format = true

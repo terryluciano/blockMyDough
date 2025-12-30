@@ -1,0 +1,17 @@
+DUMB_MESSAGES: list[str] = [
+	"Bestie, stay locked in. We're manifesting that success today!",
+	'No cap, your future self is gonna be so proud if you stay focused.',
+	"Main character energy only. Don't let the distractions win.",
+	"Slay your goals, one task at a time. You've got the vision!",
+	'Big brain moves only. Keep that grindset going, fam.',
+	"That's a major flex to stay disciplined. Keep it 100!",
+	"We're on that glow-up journey. Focus is the vibe.",
+	"Don't let the side quests distract you from the main quest.",
+	"Period. You're doing amazing, sweetie. Keep pushing!",
+	'Straight fire! Your dedication is unmatched. Stay on track.',
+	"It's the focus for me. You're absolutely killing it!",
+	"No distractions allowed. We're chasing that bread and that growth.",
+	'Real talk, consistency is the ultimate cheat code. Keep going!',
+	'W energy. Stay focused and watch everything fall into place.',
+	"Secure the bag, secure the future. You're doing the most (in a good way)!",
+]
