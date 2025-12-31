@@ -1,11 +1,12 @@
-import typer
-from rich.panel import Panel
-from blockmydough.cli.ui import app_console
-from blockmydough.core.presets import PRESETS
 from typing import Annotated
 
+import typer
+from rich.panel import Panel
 
-preset_app = typer.Typer()
+from blockmydough.cli.ui import app_console
+from blockmydough.core.presets import PRESETS
+
+preset_app = typer.Typer(help='Manage presets')
 
 
 @preset_app.command('list', help='Displays a list of all the custom and pre-defined presets')

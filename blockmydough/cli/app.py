@@ -1,13 +1,16 @@
-import typer
 import random
-from rich.panel import Panel
-from blockmydough.cli.ui import app_console
-from blockmydough.constants import DUMB_MESSAGES
 
-# Commands
+import typer
+from rich.panel import Panel
+
+from blockmydough.cli.commands.block import block_app
+from blockmydough.cli.commands.domain import domain_app
 from blockmydough.cli.commands.preset import preset_app
 from blockmydough.cli.commands.schedule import schedule_app
-from blockmydough.cli.commands.domain import domain_app
+from blockmydough.cli.commands.passphrase import passphrase_app
+from blockmydough.cli.commands.daemon import daemon_app
+from blockmydough.cli.ui import app_console
+from blockmydough.constants import DUMB_MESSAGES
 
 app = typer.Typer(help='BlockMyDough - A self-control tool to block distracting websites.')
 
@@ -15,6 +18,9 @@ app = typer.Typer(help='BlockMyDough - A self-control tool to block distracting 
 app.add_typer(schedule_app, name='schedule')
 app.add_typer(preset_app, name='preset')
 app.add_typer(domain_app, name='domain')
+app.add_typer(block_app, name='block')
+app.add_typer(passphrase_app, name='passphrase')
+app.add_typer(daemon_app, name='daemon')
 
 
 @app.callback(invoke_without_command=True)
