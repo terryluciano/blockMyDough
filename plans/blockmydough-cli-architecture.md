@@ -2,153 +2,178 @@
 
 ## What This Tool Does
 
-BlockMyDough is a **self-control tool** that blocks distracting websites by modifying `/etc/hosts`. The key features:
+BlockMyDough is a **self-control tool** that blocks distracting websites by modifying `/etc/hosts`. Key features include:
 
-1. **Block domains** - Add entries to `/etc/hosts` pointing domains to `127.0.0.1`
-2. **Timer-based blocking** - "Block YouTube for 2 hours" → cannot unblock until timer expires
-3. **Schedule-based blocking** - "Block social media Mon-Fri 9am-5pm"
-4. **Tamper protection** - If someone edits `/etc/hosts` to remove blocks, instantly re-apply them
-5. **Passphrase protection** - Cannot stop blocking or remove domains without passphrase
+1. **Domain blocking** - Permanently block specified domains.
+2. **Schedule-based blocking** - e.g., "Block social media Mon–Fri, 9 AM – 5 PM."
+3. **Timer-based blocking** - e.g., "Block social media for 1 hour."
+4. **Tamper protection** - If someone edits `/etc/hosts` to remove blocks, the daemon instantly re-applies them.
+5. **Passphrase protection** - Prevents stopping the block or removing domains without a passphrase.
 
 ---
 
-## Real-World Usage Examples
+## CLI Commands Reference
 
-### Example 1: Start a Focus Session
+Commands marked with **⚠️** require your passphrase if a block is currently active to prevent impulsive bypassing.
 
-```bash
-# You want to focus for 2 hours - block all distracting sites
-$ blockmydough block --for 2h
+### 🌐 Domain Management
 
-🔒 Blocking 15 domains for 2 hours
-   Started: 10:00 AM
-   Ends at: 12:00 PM
+Manage your global list of blocked domains.
 
-   Blocked domains:
-   - youtube.com
-   - facebook.com
-   - twitter.com
-   - reddit.com
-   ... and 11 more
+#### `domain add`
 
-⚠️  Sites are now blocked. Enter passphrase to cancel early.
-```
+Add a new domain to your permanent block list.
 
-Now if you try to visit youtube.com in your browser → Connection refused.
+-   **Usage**: `bmd domain add <domain>`
+-   **Arguments**:
+    -   `<domain>`: Comma-separated domains to block (e.g. `reddit.com,x.com` or `x.com`).
+-   **Example**: `bmd domain add x.com`
 
-### Example 2: Try to Cheat (It Wont Work)
+#### `domain remove` **⚠️**
 
-```bash
-# You try to manually edit /etc/hosts to remove the blocks
-$ sudo nano /etc/hosts
-# Delete the BlockMyDough entries and save...
+Remove a domain from your permanent block list.
 
-# Within 1 second, the daemon detects the change:
-[blockmydough-daemon] Tampering detected! Re-applying blocks...
-[blockmydough-daemon] 15 domains re-blocked.
+-   **Usage**: `bmd domain remove <domain>`
+-   **Arguments**:
+    -   `<domain>`: Comma-separated domains to unblock (e.g. `reddit.com,x.com` or `x.com`).
+-   **Example**: `bmd domain remove x.com`
 
-# The blocks are back. You cannot cheat.
-```
+#### `domain list`
 
-### Example 3: Try to Stop the Daemon
+Display all domains currently in your permanent block list.
 
-```bash
-$ blockmydough stop
+-   **Usage**: `bmd domain list`
 
-🔒 Active block in progress (1h 23m remaining)
-   Enter passphrase to stop: ********
+---
 
-❌ Incorrect passphrase. Daemon still running.
-```
+### 📋 Preset Management
 
-```bash
-# Even if you try to kill it directly:
-$ sudo systemctl stop blockmydough
+Manage groups of domains (e.g., "social", "gaming") for quick blocking.
 
-# The watchdog notices and restarts it within 1 second:
-[systemd] blockmydough.service: Stopping...
-[blockmydough-watchdog] Main daemon stopped! Restarting...
-[systemd] blockmydough.service: Started BlockMyDough Daemon
+#### `preset list`
 
-# You literally cannot stop it without the passphrase.
-```
+Show all available built-in and custom presets.
 
-### Example 4: Set Up a Work Schedule
+-   **Usage**: `bmd preset list`
 
-```bash
-$ blockmydough schedule add \
-    --name "work-hours" \
-    --days mon,tue,wed,thu,fri \
-    --from 09:00 \
-    --to 17:00
+#### `preset create`
 
-✅ Schedule 'work-hours' created
+Create a new empty preset.
 
-   When active, these domains will be blocked:
-   - All domains in your block list (15 domains)
+-   **Usage**: `bmd preset create <name>`
+-   **Arguments**:
+-   `<name>`: Unique name for the new preset.
+-   **Example**: `bmd preset create deep-work`
 
-   Schedule:
-   ┌────────────────────────────────────────┐
-   │ Mon  Tue  Wed  Thu  Fri  Sat  Sun      │
-   │ ████ ████ ████ ████ ████ ░░░░ ░░░░     │
-   │ 9am ──────────────────── 5pm           │
-   └────────────────────────────────────────┘
-```
+#### `preset add`
 
-### Example 5: Add a Domain While Blocking is Active
+Add domain(s) to preset
 
-```bash
-# You realize you also need to block Netflix
-$ blockmydough add netflix.com
+-   **Usage**: `bmd preset add --preset <preset> --domain <domain>`
+-   **Flags**:
+    -   `-p`,`--preset`: [Required]: Selected preset (e.g. `deep-work`).
+    -   `-d`,`--domain`: [Required]: Comma-separated days (e.g., `youtube.com,x.com` or `youtube.com`).
+-   **Example**: `bmd preset add -p deep-work -d youtube.com,x.com`
 
-✅ Added netflix.com to block list
-   Immediately applied - netflix.com is now blocked
+---
 
-$ blockmydough list
+### ⏳ Block Timer
 
-Blocked Domains (16):
-  1. youtube.com        ⛔ ACTIVE
-  2. www.youtube.com    ⛔ ACTIVE
-  3. facebook.com       ⛔ ACTIVE
-  4. netflix.com        ⛔ ACTIVE (just added)
-  ...
-```
+Start or manage temporary blocking sessions.
 
-### Example 6: Using Presets to Quickly Add Common Sites
+#### `block`
 
-```bash
-# List available presets
-$ blockmydough preset list
+Start a timed block session for a specific preset.
 
-Available Presets:
-  social       - Facebook, Twitter, Instagram, TikTok, Snapchat (12 domains)
-  video        - YouTube, Netflix, Twitch, Disney+, Hulu (15 domains)
-  news         - CNN, BBC, NYT, Reddit, HackerNews (20 domains)
-  gaming       - Steam, Discord, Twitch, Reddit gaming subs (10 domains)
-  shopping     - Amazon, eBay, Etsy, AliExpress (8 domains)
-  all          - All of the above combined (65 domains)
+-   **Usage**: `bmd block <preset> [--dur <minutes>]`
+-   **Arguments**:
+    -   `<preset>`: The name of the preset to block.
+-   **Flags**:
+    -   `-d`, `--dur` [Optional]: Duration in minutes (Default: `20`).
+-   **Example**: `bmd block social --dur 60` (Starts a 1-hour block)
 
-$ blockmydough preset add social
+#### `block stop` **⚠️**
 
-✅ Added 12 domains from 'social' preset:
-   - facebook.com
-   - www.facebook.com
-   - twitter.com
-   - x.com
-   - instagram.com
-   - www.instagram.com
-   - tiktok.com
-   - www.tiktok.com
-   - snapchat.com
-   - web.snapchat.com
-   - threads.net
-   - www.threads.net
+Immediately end an active timed block session.
 
-$ blockmydough preset add video
+-   **Usage**: `bmd block stop`
+-   **Example**: `bmd block stop`
 
-✅ Added 15 domains from 'video' preset
-   (3 were already in your list, 12 new domains added)
-```
+---
+
+### 📅 Schedule Management
+
+Configure recurring blocking windows (e.g., "Work Hours").
+
+#### `schedule add`
+
+Create a new recurring schedule for a preset.
+
+-   **Usage**: `bmd schedule add <preset> --name <name> --days <days> --from <start> --to <end>`
+-   **Arguments**:
+    -   `<preset>`: The preset to apply during this schedule.
+-   **Flags**:
+    -   `-n`, `--name` [Required]: A descriptive name (e.g., `work-hours`).
+    -   `-dy`, `--days` [Required]: Comma-separated days (e.g., `mon,tue,wed` or `mon`).
+    -   `-f`, `--from` [Required]: Start time in 24h format (e.g., `09:00`).
+    -   `-t`, `--to` [Required]: End time in 24h format (e.g., `17:00`).
+-   **Example**: `bmd schedule add social --name focus-morning --days mon,wed,fri --from 08:30 --to 11:30`
+
+#### `schedule list`
+
+List all active and configured schedules.
+
+-   **Usage**: `bmd schedule list`
+-   **Example**: `bmd schedule list`
+
+#### `schedule remove` **⚠️**
+
+Delete a specific schedule.
+
+-   **Usage**: `bmd schedule remove <id_or_name>`
+-   **Arguments**:
+    -   `<id_or_name>`: The ID or name of the schedule to delete.
+-   **Example**: `bmd schedule remove focus-morning`
+
+---
+
+### ⚙️ Daemon Control
+
+Manage the background service that enforces the blocks.
+
+#### `start`
+
+Start the BlockMyDough daemon.
+
+-   **Usage**: `sudo bmd start`
+-   **Example**: `sudo bmd start`
+
+#### `stop` **⚠️**
+
+Gracefully stop the background daemon.
+
+-   **Usage**: `sudo bmd stop`
+-   **Example**: `sudo bmd stop`
+
+---
+
+### 🔒 Security
+
+Manage your protection passphrase.
+
+#### `passphrase set`
+
+Create or update your security passphrase.
+
+-   **Usage**: `bmd passphrase set`
+-   **Example**: `bmd passphrase set`
+
+#### `passphrase verify`
+
+Test your currently set passphrase.
+
+-   **Usage**: `bmd passphrase verify`
+-   **Example**: `bmd passphrase verify`
 
 ---
 
@@ -299,131 +324,6 @@ $ blockmydough preset add video
 └─────────┘                                 │
 ```
 
-### Rate Limiting Specification
-
-<!-- CRITICAL: Without rate limiting, passphrase can be brute-forced -->
-
-The daemon tracks failed passphrase attempts and enforces exponential backoff.
-
-> **Note:** Uses Unix epoch timestamps (`time.time()`) instead of `time.monotonic()`
-> because `monotonic()` resets to zero on system reboot, which would allow an attacker
-> to reboot and bypass rate limiting.
-
-```python
-# blockmydough/core/auth.py
-
-from dataclasses import dataclass, field
-from time import time
-
-@dataclass
-class RateLimitState:
-    """
-    Persisted in state.json under 'rate_limit' key.
-
-    Uses Unix epoch timestamps for persistence across reboots.
-    """
-    failed_attempts: int = 0
-    last_attempt_epoch: float = 0.0      # Unix timestamp
-    lockout_until_epoch: float = 0.0     # Unix timestamp
-
-class RateLimiter:
-    """
-    Exponential backoff for passphrase attempts.
-
-    Backoff schedule:
-      1 failure  → 2 second wait
-      2 failures → 4 second wait
-      3 failures → 8 second wait
-      4 failures → 16 second wait
-      5 failures → 32 second wait
-      6+ failures → 60 second wait (capped)
-    """
-
-    BASE_DELAY_SECONDS = 2
-    MAX_DELAY_SECONDS = 60
-    RESET_AFTER_SECONDS = 300  # Reset counter after 5 min of no attempts
-
-    def get_lockout_remaining(self, state: RateLimitState) -> float:
-        """Returns seconds until next attempt allowed. 0 if allowed now."""
-        now = time()
-        if state.lockout_until_epoch > now:
-            return state.lockout_until_epoch - now
-        return 0.0
-
-    def record_failure(self, state: RateLimitState) -> RateLimitState:
-        """Record a failed attempt and calculate next lockout."""
-        now = time()
-
-        # Reset if enough time has passed
-        if now - state.last_attempt_epoch > self.RESET_AFTER_SECONDS:
-            state.failed_attempts = 0
-
-        state.failed_attempts += 1
-        state.last_attempt_epoch = now
-
-        delay = min(
-            self.BASE_DELAY_SECONDS * (2 ** (state.failed_attempts - 1)),
-            self.MAX_DELAY_SECONDS
-        )
-        state.lockout_until_epoch = now + delay
-
-        return state
-
-    def record_success(self, state: RateLimitState) -> RateLimitState:
-        """Reset rate limit state on successful auth."""
-        return RateLimitState()  # Fresh state
-```
-
----
-
-## CLI Commands Reference
-
-### Domain Management
-
-| Command             | What It Does             | Example                              |
-| ------------------- | ------------------------ | ------------------------------------ |
-| `add <domain>`      | Add domain to block list | `blockmydough add youtube.com`       |
-| `remove <domain>`   | Remove domain from list  | `blockmydough remove youtube.com` ⚠️ |
-| `list`              | Show all blocked domains | `blockmydough list`                  |
-| `preset list`       | Show available presets   | `blockmydough preset list`           |
-| `preset add <name>` | Add preset to block list | `blockmydough preset add social`     |
-
-⚠️ = Requires passphrase during active block
-
-### Blocking Controls
-
-| Command                | What It Does        | Example                            |
-| ---------------------- | ------------------- | ---------------------------------- |
-| `block --for <time>`   | Block for duration  | `blockmydough block --for 2h30m`   |
-| `block --until <time>` | Block until time    | `blockmydough block --until 17:00` |
-| `unblock`              | Cancel active block | `blockmydough unblock` ⚠️          |
-| `status`               | Show current status | `blockmydough status`              |
-
-### Schedule Management
-
-| Command                 | What It Does        | Example                                       |
-| ----------------------- | ------------------- | --------------------------------------------- |
-| `schedule add`          | Create new schedule | See example above                             |
-| `schedule list`         | List all schedules  | `blockmydough schedule list`                  |
-| `schedule remove <id>`  | Delete a schedule   | `blockmydough schedule remove work-hours` ⚠️  |
-| `schedule enable <id>`  | Enable a schedule   | `blockmydough schedule enable work-hours`     |
-| `schedule disable <id>` | Disable temporarily | `blockmydough schedule disable work-hours` ⚠️ |
-
-### Daemon Control
-
-| Command   | What It Does     | Example                        |
-| --------- | ---------------- | ------------------------------ |
-| `start`   | Start the daemon | `sudo blockmydough start`      |
-| `stop`    | Stop the daemon  | `sudo blockmydough stop` ⚠️    |
-| `restart` | Restart daemon   | `sudo blockmydough restart` ⚠️ |
-
-### Security
-
-| Command             | What It Does          | Example                          |
-| ------------------- | --------------------- | -------------------------------- |
-| `passphrase set`    | Set/change passphrase | `blockmydough passphrase set`    |
-| `passphrase verify` | Test your passphrase  | `blockmydough passphrase verify` |
-
 ---
 
 ## How /etc/hosts Blocking Works
@@ -435,14 +335,35 @@ When you block a domain, the daemon adds entries like this to `/etc/hosts`:
 127.0.0.1   localhost
 ::1         localhost
 
-# Start BlockMyDough Entries
+# Permanent Blocks - BlockMyDough
+# <perm>
 127.0.0.1 youtube.com
 ::1       youtube.com
 127.0.0.1 www.youtube.com
 ::1       www.youtube.com
 127.0.0.1 facebook.com
 ::1       facebook.com
-# End BlockMyDough Entries
+# </perm>
+
+# Schedule Blocks - BlockMyDough
+# <schedule>
+127.0.0.1 netflix.com
+::1       netflix.com
+127.0.0.1 www.netflix.com
+::1       www.netflix.com
+127.0.0.1 amazon.com
+::1       amazon.com
+# </schedule>
+
+# Timer Blocks - BlockMyDough
+# <timer>
+127.0.0.1 netflix.com
+::1       netflix.com
+127.0.0.1 www.netflix.com
+::1       www.netflix.com
+127.0.0.1 amazon.com
+::1       amazon.com
+# </timer>
 ```
 
 **Why this works:**
@@ -944,7 +865,7 @@ _Goal: Schedules, notifications, and system integration._
 
 _Goal: Final verification._
 
-1. **Logging**: Ensure consistent Structured logging across daemon.
+1. **Logging**: Ensure consistent structured logging across the daemon.
 2. **Documentation**: Update README and help texts.
 3. **End-to-End Testing**:
     - Verify tamper protection with `chattr` active.

@@ -20,8 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
-blockmydough = "blockmydough.cli.app:app"
-# blockmydough-daemon = "blockmydough.daemon.service:main"
+bmd = "blockmydough.cli.app:app"
+bmd-daemon = "blockmydough.daemon.service:main"
 
 [dependency-groups]
 dev = [
