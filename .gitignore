@@ -10,3 +10,7 @@ data/
 
 # Virtual environments
 .venv
+
+# dev stuff
+.dev/
+.env

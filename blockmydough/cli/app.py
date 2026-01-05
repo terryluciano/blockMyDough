@@ -11,6 +11,7 @@ from blockmydough.cli.commands.passphrase import passphrase_app
 from blockmydough.cli.commands.daemon import daemon_app
 from blockmydough.cli.ui import app_console
 from blockmydough.constants import DUMB_MESSAGES
+from blockmydough.core import state
 
 app = typer.Typer(help='BlockMyDough - A self-control tool to block distracting websites.')
 
@@ -38,6 +39,8 @@ def main(ctx: typer.Context):
 			justify='center',
 			no_wrap=False,
 		)
+
+		app_console.print(state.read_state())
 
 
 @app.command()

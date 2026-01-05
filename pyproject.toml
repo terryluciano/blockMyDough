@@ -13,6 +13,7 @@ dependencies = [
     "argon2-cffi>=25.1.0",
     "dbus-python>=1.4.0",
     "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
     "rich>=14.2.0",
     "sdnotify>=0.3.2",
     "typer>=0.21.0",

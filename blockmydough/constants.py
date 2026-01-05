@@ -1,3 +1,30 @@
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+env_path = Path('.') / 'env' / '.env'
+
+load_dotenv(dotenv_path=env_path)
+
+environment = os.getenv('ENVIRONMENT', 'prod')
+
+# Default production paths (FHS-compliant)
+_DEFAULT_DATA_DIR = Path('/var/lib/blockmydough')
+_DEFAULT_RUN_DIR = Path('/run/blockmydough')
+
+# Allow override for development
+DATA_DIR = Path(os.getenv('DATA_DIR', _DEFAULT_DATA_DIR))
+RUN_DIR = Path(os.getenv('RUN_DIR', _DEFAULT_RUN_DIR))  # figure this out later
+
+# Derived paths
+STATE_FILE = DATA_DIR / 'state.json'
+DOMAINS_FILE = DATA_DIR / 'domains.txt'
+SCHEDULES_FILE = DATA_DIR / 'schedules.json'
+PRESETS_FILE = DATA_DIR / 'presets.json'
+AUTH_KEY_FILE = DATA_DIR / 'auth.key'
+SOCKET_PATH = RUN_DIR / 'daemon.sock'
+
+
 DUMB_MESSAGES: list[str] = [
 	"Bestie, stay locked in. We're manifesting that success today!",
 	'No cap, your future self is gonna be so proud if you stay focused.',
