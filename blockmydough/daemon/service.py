@@ -1,5 +1,5 @@
-import time
 import sys
+import time
 
 # TODO: idK what this is for yet
 

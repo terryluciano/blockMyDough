@@ -31,6 +31,23 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # Pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+]
+
+# Rules to ignore (optional)
+ignore = ["W191"]
+
+# Auto-fix behavior
+fixable = ["ALL"]
 
 [tool.ruff.format]
 quote-style = 'single'

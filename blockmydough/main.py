@@ -1,6 +1,6 @@
+import os
 import random
 from pathlib import Path
-import os
 
 dumbMessages = [
 	"Bestie, stay locked in. We're manifesting that success today!",
@@ -58,7 +58,7 @@ def backup_hosts_file():
 
 	backup_path.parent.mkdir(parents=True, exist_ok=True)
 
-	hosts_file = open('/etc/hosts', 'r')
+	hosts_file = open('/etc/hosts')
 	hosts_file.seek(0)
 
 	lines = hosts_file.readlines()
@@ -80,12 +80,12 @@ def backup_hosts_file():
 	hosts_backup_file = open(backup_path, 'w')
 
 	for line in clean_lines:
-		hosts_backup_file.write('{0}'.format(line))
+		hosts_backup_file.write(f'{line}')
 
 	hosts_backup_file.close()
 
 	print('A backup of your hosts file has been created at:')
-	print('{0}\n'.format(backup_path))
+	print(f'{backup_path}\n')
 
 
 def generate_block_hosts_file():
@@ -94,7 +94,7 @@ def generate_block_hosts_file():
 	# Open hosts file and update it
 	print('Updating your hosts file to block dumb sites...\n')
 
-	with open('/etc/hosts', 'r') as f:
+	with open('/etc/hosts') as f:
 		lines = f.readlines()
 
 	# Filter out existing block
@@ -120,13 +120,13 @@ def generate_block_hosts_file():
 		if clean_lines and not clean_lines[-1].endswith('\n'):
 			f.write('\n')
 
-		f.write('{0}\n'.format(block_entry_marker))
+		f.write(f'{block_entry_marker}\n')
 
 		for domain in blocked_domains_file:
-			f.write('127.0.0.1 {0}\n'.format(domain))
-			f.write('::1       {0}\n'.format(domain))
+			f.write(f'127.0.0.1 {domain}\n')
+			f.write(f'::1       {domain}\n')
 
-		f.write('{0}\n'.format(block_end_entry_marker))
+		f.write(f'{block_end_entry_marker}\n')
 
 	print('Domains have been BLOCKED!')
 
@@ -142,7 +142,7 @@ def flush_dns_cache():
 	if result == 0:
 		print('DNS cache flushed successfully!\n')
 	else:
-		print('Warning: Failed to flush DNS cache (exit code: {0})\n'.format(result))
+		print(f'Warning: Failed to flush DNS cache (exit code: {result})\n')
 		print('You may need to manually run: sudo resolvectl flush-caches\n')
 		return False
 
@@ -163,7 +163,7 @@ def main():
 
 	random_message = dumbMessages[random.randint(0, len(dumbMessages) - 1)]
 
-	print('{0}\n'.format(random_message))
+	print(f'{random_message}\n')
 
 	backup_hosts_file()
 

@@ -1,10 +1,50 @@
-from pydantic import BaseModel, model_validator, field_validator
-from pydantic.types import UUID4
-from typing import Literal, Self
 from datetime import time
+from typing import Literal, Self
+
+from pydantic import BaseModel, field_validator, model_validator
+from pydantic.types import UUID4
+
+from blockmydough.constants import DOMAINS_FILE, HOSTS_FILE
 
 
-def set_domains(domains: list[str]):
+class SetDomains(BaseModel):
+	domains: list[str]
+
+	@model_validator(mode='after')
+	def validate_domains(self) -> Self:
+		if not self.domains:
+			raise ValueError('domains cannot be empty')
+		return self
+
+
+def add_domains(domains: list[str]):
+	# # Validate Data
+	if not domains:
+		raise ValueError('domains cannot be empty')
+
+	hosts_file = open(HOSTS_FILE)
+	hosts_file.seek(0)
+
+	domains_file = open(DOMAINS_FILE)
+	domains_file.seek(0)
+
+	lines = domains_file.readlines()
+
+	saved_domains: list[str] = []
+
+	for line in lines:
+		if not line.startswith('#'):
+			saved_domains.append(line.strip())
+
+	saved_domains.extend(domains)
+
+	domains_file.close()
+	hosts_file.close()
+
+	return saved_domains
+
+
+def remove_domains(domains: list[str]):
 	pass
 
 

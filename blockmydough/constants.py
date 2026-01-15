@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 env_path = Path('.') / 'env' / '.env'
@@ -23,6 +24,16 @@ SCHEDULES_FILE = DATA_DIR / 'schedules.json'
 PRESETS_FILE = DATA_DIR / 'presets.json'
 AUTH_KEY_FILE = DATA_DIR / 'auth.key'
 SOCKET_PATH = RUN_DIR / 'daemon.sock'
+
+HOSTS_FILE = '/etc/hosts'
+
+# Section Markers
+DOMAINS_MARKER_START = '# <domains>'
+DOMAINS_MARKER_END = '# </domains>'
+SCHEDULES_MARKER_START = '# <schedules>'
+SCHEDULES_MARKER_END = '# </schedules>'
+PRESETS_MARKER_START = '# <presets>'
+PRESETS_MARKER_END = '# </presets>'
 
 
 DUMB_MESSAGES: list[str] = [

@@ -1,8 +1,10 @@
-from blockmydough.constants import STATE_FILE
 import json
-from pydantic import BaseModel, ValidationError
-from pydantic.types import UUID4
 from typing import Literal
+
+from pydantic import BaseModel
+from pydantic.types import UUID4
+
+from blockmydough.constants import STATE_FILE
 
 
 class ScheduleState(BaseModel):
@@ -11,7 +13,7 @@ class ScheduleState(BaseModel):
 
 def read_state():
 	try:
-		with open(STATE_FILE, 'r', encoding='utf-8') as f:
+		with open(STATE_FILE, encoding='utf-8') as f:
 			return json.load(f)
 	except FileNotFoundError:
 		return None
@@ -28,8 +30,8 @@ class WriteState(BaseModel):
 	timer_id: str | None = None
 
 
-def write_state(data: WriteState):
-	try:
-		test = WriteState.model_validate(data)
-	except ValidationError as e:
-		print(e)
+# def write_state(data: WriteState):
+# 	try:
+# 		test = WriteState.model_validate(data)
+# 	except ValidationError as e:
+# 		print(e)
